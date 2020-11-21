@@ -5,6 +5,8 @@ import os
 import time
 import json
 
+from multiprocessing import Process
+
 class Provenance:
     
     # Constants:
@@ -212,7 +214,22 @@ class Provenance:
         # Increment operation number:
         self.operation_number += 1
         self.instance = self.OUTPUT + str(self.operation_number)
-            
+
+
+    def save_entities_multiproc(self,entities, ents_path):
+        for i in range(0, len(entities), self.CHUNK_SIZE):
+            output_name = ents_path + '.json' if i // self.CHUNK_SIZE == 0 else ents_path + '_' + str(
+                i // self.CHUNK_SIZE) + '.json'
+            with open(output_name, 'w', encoding='utf-8') as ents_file:
+                ents = entities[i:i + self.CHUNK_SIZE]
+                json.dump(ents, ents_file, ensure_ascii=False, indent=4)
+    def save_rel_multiproc(self,rel_path):
+        for i in range(0, len(self.current_relations), self.CHUNK_SIZE):
+            output_name = rel_path + '.json' if i // self.CHUNK_SIZE == 0 else rel_path + '_' + str(
+                i // self.CHUNK_SIZE) + '.json'
+            with open(output_name, 'w', encoding='utf-8') as rel_file:
+                rels = self.current_relations[i:i + self.CHUNK_SIZE]
+                json.dump(rels, rel_file, ensure_ascii=False, indent=4)
     def save_json_prov(self, nameFile):
         """Save provenance in json file."""
         if not os.path.exists(nameFile):
@@ -227,11 +244,15 @@ class Provenance:
         entities = self.new_entities
         
         if entities:
+
             for i in range(0, len(entities), self.CHUNK_SIZE):
-                output_name = ents_path + '.json' if i//self.CHUNK_SIZE == 0 else ents_path + '_' + str(i//self.CHUNK_SIZE) + '.json'
+                """output_name = ents_path + '.json' if i//self.CHUNK_SIZE == 0 else ents_path + '_' + str(i//self.CHUNK_SIZE) + '.json'
                 with open(output_name, 'w', encoding='utf-8') as ents_file:
                     ents = entities[i:i+self.CHUNK_SIZE]
-                    json.dump(ents, ents_file, ensure_ascii=False, indent=4)
+                    json.dump(ents, ents_file, ensure_ascii=False, indent=4)"""
+                p1 = Process(target=self.save_entities_multiproc, args=(entities,ents_path))
+
+
                 
         # Save activities:
         if self.current_act:
@@ -240,16 +261,24 @@ class Provenance:
                 
         # Save all relations:
         if self.current_relations:
-            for i in range(0, len(self.current_relations), self.CHUNK_SIZE):
+            """for i in range(0, len(self.current_relations), self.CHUNK_SIZE):
                 output_name = rel_path + '.json' if i//self.CHUNK_SIZE == 0 else rel_path + '_' + str(i//self.CHUNK_SIZE) + '.json'
                 with open(output_name, 'w', encoding='utf-8') as rel_file:
                     rels = self.current_relations[i:i+self.CHUNK_SIZE]
-                    json.dump(rels, rel_file, ensure_ascii=False, indent=4)
+                    json.dump(rels, rel_file, ensure_ascii=False, indent=4)"""
+
+            p2 = Process(target=self.save_rel_multiproc, args=(rel_path,))
+        if entities :
+            p1.start()
+        ## da sistemare multi proc, se non esiste relazione o entities -> error, già così miglioramento 20/30% a operazione di salvataggio, nel complesso 10/15%
+        p2.start()
+        p1.join()
+        p2.join()
         
     ###
     ###  PROVENANCE METHODS
     ###
-    
+
     @timing
     def get_prov_feature_transformation(self, df_out, columnsName, description=None):
         """Return provenance document related to features trasformation function.
@@ -266,7 +295,7 @@ class Provenance:
         # Output values:
         columns_out = df_out.columns
         indexes_out = df_out.index
-        
+
         for col_name in columnsName:
             act_id = self.create_activity(function_name, col_name, description)
             col_index = columns_out.get_loc(col_name)
@@ -275,17 +304,17 @@ class Provenance:
                 e_in_identifier = e_in['identifier']
                 record_id = e_in['attributes']['record_id']
                 value = str(df_out.iat[i, col_index])
-                
+
                 # Create a new entity with new value:
                 ent_id = self.NAMESPACE_ENTITY + str(uuid.uuid4())
                 e_out = self.create_entity(ent_id, record_id, value, col_name, indexes_out[i], self.operation_number)
                 e_out_identifier = e_out['identifier']
-                    
+
                 self.create_relation(self.GENERATION, a=e_out_identifier, b=act_id)
                 self.create_relation(self.USE, a=act_id, b=e_in_identifier)
                 self.create_relation(self.DERIVATION, a=e_out_identifier, b=e_in_identifier)
                 self.create_relation(self.INVALIDATION, a=e_in_identifier, b=act_id)
-                
+
                 entities_in[i][col_index] = e_out
                 
         # Update current values:
@@ -332,7 +361,7 @@ class Provenance:
             
         # Create space transformation activity:
         act_id = self.create_activity(function_name, ', '.join(columnsName), description)
-        
+
         # Get provenance related to the new column:
         for i in range(m):
             first_ent = entities_in[i][0]
@@ -358,13 +387,13 @@ class Provenance:
                 old_j = columns_in.get_loc(col_name)
                 new_j = columns_out.get_loc(col_name)
                 entities_out[:,new_j] = entities_in[:,old_j]
-                
+
         # Update current values:
         self.set_current_values(df_out, entities_out)
-        
+        time_start=time.time()
         # Save provenance document in json file:
         self.save_json_prov(os.path.join(self.results_path, self.instance))
-
+        print(time.time()-time_start)
         return self
     
     @timing
