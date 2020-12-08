@@ -13,22 +13,22 @@ def shape_change_provenance_tracking(prov_tracker_obj):
     new_shape = new_df.shape
     if new_shape[0] < old_shape[0] :
         #dim reduction, instance selection
-        print('Instance selection detected')
-        prov_tracker_obj.provenance_obj.get_prov_dim_reduction(new_df)
+        print('Instance drop detected')
+        prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_dim_reduction(new_df)
     if new_shape[1] < old_shape[1] :
         dropped_col = columns_list_difference(old_df.columns, new_df.columns)
         if len(prov_tracker_obj.col_add) > 0:
         # data reduction detected, not dim reduction but space transformation
             print(f'Space transform detected, {dropped_col} generated the new column{prov_tracker_obj.col_add}.')
             print('Warning: Remember that the last dropped columns (last operation) are the columns linked to the space transform.'
-                  ' If you want to use space transform without dropping columns use ... method indicating the column joined in the transformation')
-            prov_tracker_obj.provenance_obj.get_prov_space_transformation(new_df,dropped_col)
+                  ' If you want to use space transform without dropping columns use stop_space_prov([col_joined]) method indicating the column joined in the transformation')
+            prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_space_transformation(new_df,dropped_col)
             prov_tracker_obj.col_add=[]
             return
 
         #dim reduction, feature selection/dropped column
         print(f'Column drop detected on {dropped_col}')
-        prov_tracker_obj.provenance_obj.get_prov_dim_reduction(new_df)
+        prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_dim_reduction(new_df)
 
     if new_shape[0] > old_shape[0] :
         # instance generation
@@ -59,7 +59,7 @@ def value_change_provenance_tracking(prov_tracker_obj):
                 #imputated column
                 imputed_col.append(col)
         print(f'Imputation detected in columns: {imputed_col}')
-        prov_tracker_obj.provenance_obj.get_prov_imputation(new_df,imputed_col)
+        prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_imputation(new_df,imputed_col)
         return
 
     # value transform, feature transform
@@ -82,12 +82,12 @@ def value_change_provenance_tracking(prov_tracker_obj):
     if feature_change and len(changed_col)>0:
         #feature transform
         print(f'Feature change detected on {changed_col} columns')
-        prov_tracker_obj.provenance_obj.get_prov_feature_transformation(new_df,changed_col)
+        prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_feature_transformation(new_df,changed_col)
         return
     elif not feature_change and len(changed_col)>0:
         #value transform
         print(f'Value change detected on {changed_col} columns')
-        prov_tracker_obj.provenance_obj.get_prov_value_transformation(new_df, changed_col)
+        prov_tracker_obj.provenance_obj=prov_tracker_obj.provenance_obj.get_prov_value_transformation(new_df, changed_col)
         return
 
 

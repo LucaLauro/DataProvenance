@@ -2,6 +2,8 @@ from prov_acquisition.prov_libraries import logic_tracker
 import pandas as pd
 import numpy as np
 
+class TooManyArg(Exception):
+    pass
 global_tracker=0    # instance of a global variable used for tracking with __setitem__
 
 
@@ -23,7 +25,8 @@ class ProvenanceTracker:
         self.value_change = False
         global global_tracker
         global_tracker=self
-
+        self.second_df = []
+        self.join_operation = {'axis': None, 'on': None}
 
     def dataframe_is_changed(self):
         global global_tracker
@@ -69,6 +72,23 @@ class ProvenanceTracker:
         #print('set method launched')
         global  global_tracker
         self._df = New_df(new_value)
+        if self.join_operation['axis'] is not None:
+            print('Union detected')
+            # launch provenace
+            self.provenance_obj.get_prov_union(self._df, self.join_operation['axis'])
+            # reset join op
+            self.join_operation['axis'] = None
+            global_tracker = self
+            return
+        if self.join_operation['on'] is not None:
+            print('Join detected')
+            #launch provenance
+            print('Warning, use the principal df as left df and second df as right df. Only standard suffix will work. Duplicate rows will not work')
+            self.provenance_obj.get_prov_join(self._df,self.join_operation['on'])
+            # reset join op
+            self.join_operation['on'] = None
+            global_tracker = self
+            return
         self.dataframe_is_changed()
         #self._notify_observers(self._copy_df, self._df)
         if self.shape_change:
@@ -86,6 +106,26 @@ class ProvenanceTracker:
         self.col_add = []
         self.provenance_obj.get_prov_space_transformation(self._df, col_joined)
         return
+
+    def add_second_df(self,second_dataframe):
+        self.second_df = second_dataframe
+        self.provenance_obj.add_second_df(second_dataframe)
+
+    def set_join_op(self, axis=None, on=None):
+        try:
+            if axis != None and on != None:
+                raise TooManyArg
+            else:
+                if axis is not None:
+                    self.join_operation['axis'] = axis
+                elif on is not None:
+                    self.join_operation['on'] = on
+        except:
+            raise TooManyArg('Too many argument different from None used, use at least 1')
+
+
+
+
 
 
     """def _notify_observers(self, old_value, new_value):
@@ -107,3 +147,4 @@ class New_df(pd.DataFrame):
         #obj=inspect.stack()[1][0].f_globals['holder']
         global_tracker.dataframe_is_changed()
         global_tracker.track_provenance()
+
